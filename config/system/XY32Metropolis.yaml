@@ -1,0 +1,11 @@
+size: 32
+snapshots: 2000
+MCsteps: 1e7
+interval: 1e7
+Tin: 1.6
+Tfinal: 0.7
+delta: -0.1
+dT: -0.01
+MCmethod: "Metropolis"
+path: "/home/javier/Projects/RKM/Results/"
+modelname: XY32Metropolis_2
