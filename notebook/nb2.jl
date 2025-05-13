@@ -56,7 +56,7 @@ for epoch in 1:1
         # Δw = compute_gradients_approx(x,rkm,J, config)
         # Δw = compute_gradients_argmax(x,rkm,J, config)
         # Δw = compute_gradients_exact(x,rkm,J, config)
-        Δw = compute_gradients(x,rkm,J, config)
+        CUDA.@time Δw = compute_gradients(x,rkm,J, config)
         @info mean(Δw)
         updateJAdam!(J, Δw, opt; hparams)
         if i>5
@@ -77,13 +77,15 @@ hparams.gpu_usage
 @time neg_phase_argmax(rkm.v, J, 1, config.rkm["batch_size"]);
 @time neg_phase(rkm.v, J, 1, config.rkm["batch_size"]);
 
-x = CuArray{Float64}(x); #_data[1] |> dev;
+x = CuArray{Float64}(x_data[1])
+
 @time compute_gradients_approx(x,rkm,J, config);
 @time compute_gradients_argmax(x,rkm,J, config);
 @time compute_gradients_exact(x,rkm,J, config);
 @time compute_gradients(x,rkm,J, config);
 
 28*31*100/60/60
+
 
 (4*60+30)*31*100/60/60/24
 
@@ -92,6 +94,35 @@ x = CuArray{Float64}(x); #_data[1] |> dev;
 v_to_h(θ,J) .% Float32(2π)
 θ = rkm.h
 h_to_v(θ,J)
+
+A_h(θ,J,β)
+B_h(θ,J,β)
+
+
+a,b = A_h(θ,J,β),B_h(θ,J,β)
+k = CUDA.sqrt.(a .^ 2 .+ b .^ 2)
+μ = CUDA.atan.(b, a)
+
+# gpu(vonMises_sample.(cpu(μ),cpu(k)))
+s = size(k)
+psi = reshape(TikhonovGenGPUv2(reshape(k,:), CuArray(zeros(prod(s))),
+    CuArray(zeros(prod(s))),CuArray(zeros(prod(s))), CuArray(ones(Float64,prod(s),8)),
+    CuArray(ones(Float64,8,3,prod(s)))),s) .+ μ
+psi
+
+TikhonovGenGPUv2(reshape(k,:), CuArray(zeros(prod(s))),
+    CuArray(zeros(prod(s))),CuArray(zeros(prod(s))), CuArray(ones(Float64,prod(s),8)),
+    CuArray(ones(Float64,8,3,prod(s))))
+
+TikhonovGenGPUv2(α, sGL, gammaC, sGU, mT, A)
+
+
+α, sGL, gammaC, sGU, mT, A, p = CuArray(rand(prod(s))), CuArray(zeros(prod(s))),
+        CuArray(zeros(prod(s))),CuArray(zeros(prod(s))), CuArray(ones(Float64,prod(s),8)),
+        CuArray(ones(Float64, 8,3,prod(s))), CuArray(rand(3,prod(s)));
+
+#########################
+784*400
 
 rkm.v = gpu(x_data[1][:,1:400])
 

@@ -152,8 +152,54 @@ function tikhonov_loop(alpha, sGL, gammaC, sGU, mT, A)
 end
 
 ##############
+function kernel_tikhonov!(
+    α, sGL, γC, sGU, mT, A,
+    ngL::Float32, nc::Float32, ngU::Float32, N
+)
+    i = (blockIdx().x-1) * blockDim().x + threadIdx().x
+    if i <= N
+        αi  = α[i]
+        b0  = besseli(0, αi)
+
+        # compute once
+        sGLi    = sqrt(-2f0 * log(besseli(1, αi)/b0)) / ngL
+        γCi     = -(2f0 / nc)      * log(besseli(4, αi)/b0)
+        sGUi    = sqrt(-2f0 * log(besseli(7, αi)/b0)) / ngU
+
+        sGL[i]  = sGLi
+        γC[i]   = γCi
+        sGU[i]  = sGUi
+
+        @inbounds for n in 1:7
+            col = n+1
+            x = besseli(n, αi)/b0
+            mT[i,col]      = x
+            A[col,1,i]     = exp(-0.5f0*(n*sGLi)^2)
+            A[col,2,i]     = exp(-0.5f0*(n*γCi))
+            A[col,3,i]     = exp(-0.5f0*(n*sGUi)^2)
+        end
+    end
+    return
+end
+
+# Host launch wrapper
+function tikhonov_cuda!(
+    α::CuVector{Float64}, sGL, γC, sGU,
+    mT::CuMatrix{Float64}, A::CuArray{Float64,3}
+)
+    N = length(α)
+    threads = 256
+    blocks  = cld(N, threads)
+    @cuda threads=threads blocks=blocks kernel_tikhonov!(
+        α, sGL, γC, sGU, mT, A, 1f0, 4f0, 7f0, N
+    )
+    return nothing
+end
+
+##############
 function TikhonovGenGPUv2(alpha, sGL, gammaC, sGU, mT, A)
-    @cuda tikhonov_loop(alpha, sGL, gammaC, sGU, mT, A)
+    # @cuda tikhonov_loop(alpha, sGL, gammaC, sGU, mT, A)
+    tikhonov_cuda!(α, sGL, gammaC, sGU, mT, A)
     
     A_inv = batched_pinv(A);
     
@@ -183,34 +229,35 @@ function TikhonovGenGPUv2(alpha, sGL, gammaC, sGU, mT, A)
 end
 
 function TikhonovGenGPUv2_A(alpha, sGL, gammaC, sGU, mT, A)
-    @cuda tikhonov_loop(alpha, sGL, gammaC, sGU, mT, A)
+    # CUDA.@time CUDA.@sync @cuda tikhonov_loop(alpha, sGL, gammaC, sGU, mT, A)
+    CUDA.@time tikhonov_cuda!(α, sGL, gammaC, sGU, mT, A)
     
-    A_inv = batched_pinv(A);
+    CUDA.@time CUDA.@sync A_inv = batched_pinv(A);
     
-    @ein p[j,i] := A_inv[j,k,i] * mT[i,k]
-    p = p ./ sum(p, dims=1)
+    CUDA.@time @ein p[j,i] := A_inv[j,k,i] * mT[i,k]
+    CUDA.@time p = p ./ sum(p, dims=1)
     return p
 end
 
 function TikhonovGenGPUv2_B(alpha, sGL, gammaC, sGU, p)
-    @time r = CUDA.rand(Float64, size(alpha,1))
+    CUDA.@time r = CUDA.rand(Float64, size(alpha,1))
 
-    @time index1 = CUDA.findall(r .<= p[1,:])
+    CUDA.@time index1 = CUDA.findall(r .<= p[1,:])
     # @time index1 = CuArray{Int64}(1:length(r))[r .<= p[1,:]]
     @info size(index1)
-    @time index2 = CUDA.findall((r .> p[1,:]) .& (r .<= p[1,:] + p[1,:]))
+    CUDA.@time index2 = CUDA.findall((r .> p[1,:]) .& (r .<= p[1,:] + p[1,:]))
     @info size(index2)
-    @time index3 = CUDA.findall(r .> (p[1,:] + p[2,:]))
+    CUDA.@time index3 = CUDA.findall(r .> (p[1,:] + p[2,:]))
     @info size(index3)
 
-    @time xL = sGL[index1] .* CUDA.randn(Float64, length(index1))
-    @time xC = -(gammaC[index2] / 2) .* CUDA.randn(Float64, length(index2)) ./ CUDA.randn(Float64, length(index2))
-    @time xU = sGU[index3] .* CUDA.randn(Float64, length(index3))
+    CUDA.@time xL = sGL[index1] .* CUDA.randn(Float64, length(index1))
+    CUDA.@time xC = -(gammaC[index2] / 2) .* CUDA.randn(Float64, length(index2)) ./ CUDA.randn(Float64, length(index2))
+    CUDA.@time xU = sGU[index3] .* CUDA.randn(Float64, length(index3))
     
-    @time rT = CuArray(zeros(ComplexF64, prod(size(alpha))))
-    @time rT[index1] .= exp.(im .* xL)
-    @time rT[index2] .= exp.(im .* xC)
-    @time rT[index3] .= exp.(im .* xU)
+    CUDA.@time rT = CuArray(zeros(ComplexF64, prod(size(alpha))))
+    CUDA.@time rT[index1] .= exp.(im .* xL)
+    CUDA.@time rT[index2] .= exp.(im .* xC)
+    CUDA.@time rT[index3] .= exp.(im .* xU)
 
     angle.(rT)
 end
