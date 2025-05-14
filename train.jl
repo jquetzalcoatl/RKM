@@ -1,8 +1,12 @@
-include("logger.jl")
-include("../rkm/init.jl")
-include("../config/yaml_loader.jl")
-include("../rkm/gradient.jl")
-include("../rkm/tools.jl")
+include("./src/logger.jl")
+# include("../rkm/init.jl")
+# include("../config/yaml_loader.jl")
+# include("../rkm/gradient.jl")
+# include("../rkm/tools.jl")
+include("./src/init.jl")
+include("./config/yaml_loader.jl")
+include("./grad/gradient.jl")
+include("./src/tools.jl")
 config, _ = load_yaml_iter();
 
 function main()

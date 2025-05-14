@@ -199,7 +199,7 @@ end
 ##############
 function TikhonovGenGPUv2(alpha, sGL, gammaC, sGU, mT, A)
     # @cuda tikhonov_loop(alpha, sGL, gammaC, sGU, mT, A)
-    tikhonov_cuda!(α, sGL, gammaC, sGU, mT, A)
+    tikhonov_cuda!(alpha, sGL, gammaC, sGU, mT, A)
     
     A_inv = batched_pinv(A);
     
