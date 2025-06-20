@@ -1,3 +1,4 @@
 defaults:
   - system: XY32
-  - rkm: model1
+  - rkm: model4
+  - analysis: conf1

@@ -10,8 +10,8 @@ dev: 2
 optType: "Adam"
 dataset: "MNIST"
 scale: 1.0
-type: "fixed"
+type: "rand"
 data_path: "/home/javier/Projects/RKM/Results/XY32/XY32.jld"
 model_path: "/home/javier/Projects/RKM/Results/models"
-model_name: "model1"
+model_name: "model4"
 maxmem: "5GiB"

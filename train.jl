@@ -40,20 +40,35 @@ function main()
     dev = selectDev(hparams)
     @info "Training starts..."
     if hparams.gpu_usage
-        for epoch in 1:config.rkm["epochs"]
-            @info epoch
-            for (i,x) in enumerate(x_data)
-                x = CuArray{Float64}(x)
-                @info epoch, i, size(x), typeof(x)
-                # Δw = compute_gradients_approx(x,rkm,J, config)
-                # Δw = compute_gradients_argmax(x,rkm,J, config)
-                # Δw = compute_gradients_exact(x,rkm,J, config)
-                Δw = compute_gradients(x,rkm,J, config)
-                @info mean(Δw)
-                updateJAdam!(J, Δw, opt; hparams)
-            end
-            saveModel(rkm,J,hparams,config,epoch)
-        end 
+        if config.rkm["type"] == "fixed"
+            for epoch in 1:config.rkm["epochs"]
+                @info epoch
+                for (i,x) in enumerate(x_data)
+                    x = CuArray{Float64}(x)
+                    @info epoch, i, size(x), typeof(x)
+                    # Δw = compute_gradients_approx(x,rkm,J, config)
+                    # Δw = compute_gradients_argmax(x,rkm,J, config)
+                    # Δw = compute_gradients_exact(x,rkm,J, config)
+                    # Δw = compute_gradients(x,rkm,J, config)
+                    Δw = compute_gradients_centred(x,rkm,J, config)
+                    @info mean(Δw)
+                    updateJAdam!(J, Δw, opt; hparams)
+                end
+                saveModel(rkm,J,hparams,config,epoch)
+            end 
+        else
+            for epoch in 1:config.rkm["epochs"]
+                @info epoch
+                for (i,x) in enumerate(x_data)
+                    x = CuArray{Float64}(x)
+                    @info epoch, i, size(x), typeof(x)
+                    Δw = compute_gradients_centred_rdm(x,rkm,J, config)
+                    @info mean(Δw)
+                    updateJAdam!(J, Δw, opt; hparams)
+                end
+                saveModel(rkm,J,hparams,config,epoch)
+            end 
+        end
     else
         for epoch in 1:config.rkm["epochs"]
             @info epoch

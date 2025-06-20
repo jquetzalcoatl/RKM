@@ -37,6 +37,29 @@ function pos_phase(θ::Array{Float64,2}, J::Weights, bs::Int, β=1.0)
     vh_m
 end
 
+function pos_phase_centred(θ::CuArray{Float64,2}, J::Weights, bs::Int, β=1.0)
+    a,b = A_h(θ,J,β), B_h(θ,J,β)
+    k_h=CUDA.sqrt.( a .^ 2 .+ b .^ 2)
+    # bessel_ratio = besseli.(1,cpu(k_h)) ./ besseli.(0,cpu(k_h)) |> gpu
+    bessel_ratio = besseli.(1,k_h) ./ besseli.(0,k_h)
+    arg2_c, arg2_s = a .* bessel_ratio ./ k_h , b .* bessel_ratio ./ k_h
+    vh_m = (CUDA.cos.(θ) * arg2_c' + CUDA.sin.(θ) * arg2_s') ./ bs
+    vm_hm = mean(cos.(θ), dims=2) * mean(arg2_c, dims=2)' .+ mean(sin.(θ), dims=2) * mean(arg2_s, dims=2)'
+    vh_m .- vm_hm
+end
+
+function pos_phase_centred(θ::Array{Float64,2}, J::Weights, bs::Int, β=1.0)
+    a,b = A_h(θ,J,β), B_h(θ,J,β)
+    k_h=sqrt.( a .^ 2 .+ b .^ 2)
+    bessel_ratio = besseli.(1,k_h) ./ besseli.(0,k_h)
+    arg2_c, arg2_s = a .* bessel_ratio ./ k_h , b .* bessel_ratio ./ k_h
+    vh_m = (cos.(θ) * arg2_c' + sin.(θ) * arg2_s') ./ bs
+    vm_hm = mean(cos.(θ), dims=2) * mean(arg2_c, dims=2)' .+ mean(sin.(θ), dims=2) * mean(arg2_s, dims=2)'
+    vh_m .- vm_hm
+end
+
 function updateJAdam!(J, Δw, opt; hparams)
-    J.w = step!(opt.w, Δw) #(1 - hparams.γ) .* 
+    # J.w = step!(opt.w, Δw) #(1 - hparams.γ) .* 
+    w = J.w
+    J.w = step!(opt.w, Δw .- hparams.γ .* w) #(1 - hparams.γ) .* 
 end

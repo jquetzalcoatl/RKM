@@ -46,7 +46,7 @@ elseif optType=="SGD"
     opt = 0
 end
 
-dev = selectDev(hparams)
+# dev = selectDev(hparams)
 
 for epoch in 1:1
     for (i,x) in enumerate(x_data)
@@ -65,11 +65,13 @@ for epoch in 1:1
     end
 end
 
-saveModel(rkm,J,hparams,config,1)
+# saveModel(rkm,J,hparams,config,1)
 
-rkm, J, hparams = loadModel(config, idx=100 )
-CuArray{Float64}(rand(10,10)) |> dev
+rkm, J, hparams = loadModel(config, idx=500 )
+J.w
+# CuArray{Float64}(rand(10,10)) |> dev
 hparams.gpu_usage
+J.a
 
 @time pos_phase(rkm.v, J, config.rkm["batch_size"]);
 @time neg_phase_approx(rkm.v, J, 1, config.rkm["batch_size"]);
@@ -83,9 +85,10 @@ x = CuArray{Float64}(x_data[1])
 @time compute_gradients_argmax(x,rkm,J, config);
 @time compute_gradients_exact(x,rkm,J, config);
 @time compute_gradients(x,rkm,J, config);
+@time Δw = compute_gradients_centred(x,rkm,J, config);
 
-28*31*100/60/60
 
+Δw
 
 (4*60+30)*31*100/60/60/24
 
@@ -95,51 +98,33 @@ v_to_h(θ,J) .% Float32(2π)
 θ = rkm.h
 h_to_v(θ,J)
 
-A_h(θ,J,β)
-B_h(θ,J,β)
-
-
-a,b = A_h(θ,J,β),B_h(θ,J,β)
-k = CUDA.sqrt.(a .^ 2 .+ b .^ 2)
-μ = CUDA.atan.(b, a)
-
-# gpu(vonMises_sample.(cpu(μ),cpu(k)))
-s = size(k)
-psi = reshape(TikhonovGenGPUv2(reshape(k,:), CuArray(zeros(prod(s))),
-    CuArray(zeros(prod(s))),CuArray(zeros(prod(s))), CuArray(ones(Float64,prod(s),8)),
-    CuArray(ones(Float64,8,3,prod(s)))),s) .+ μ
-psi
-
 TikhonovGenGPUv2(reshape(k,:), CuArray(zeros(prod(s))),
     CuArray(zeros(prod(s))),CuArray(zeros(prod(s))), CuArray(ones(Float64,prod(s),8)),
     CuArray(ones(Float64,8,3,prod(s))))
 
 TikhonovGenGPUv2(α, sGL, gammaC, sGU, mT, A)
 
-
+s=(1,1_000_000)
 α, sGL, gammaC, sGU, mT, A, p = CuArray(rand(prod(s))), CuArray(zeros(prod(s))),
         CuArray(zeros(prod(s))),CuArray(zeros(prod(s))), CuArray(ones(Float64,prod(s),8)),
         CuArray(ones(Float64, 8,3,prod(s))), CuArray(rand(3,prod(s)));
 
 #########################
-784*400
 
+hparams
 rkm.v = gpu(x_data[1][:,1:400])
 
-θ = CuArray{Float32}(rand(784,400) .* 2π)
-θ = rand(784,400) .* 2π
-rkm.v
-v = cpu(bgs_argmax(rkm.v,J,config.rkm["t"]))
-v = cpu(bgs_approx(rkm.v,J,config.rkm["t"]))
-v = cpu(bgs(θ,J,50))
-bgs(rkm.v,J,1)
-v = cpu(v)
+θ = CuArray{Float64}(rand(size(rkm.v,1),size(rkm.v,2)) * 2π);
+v = cpu(bgs(θ,J,500));
 
-lnum=5
-mat = cat([cat([reshape(v[:,i+j*lnum],28,28) for i in 1:lnum]..., dims=2) for j in 0:lnum-1]...,dims=1)
-mat_rot = reverse(transpose(mat), dims=1)
-heatmap(cos.(mat_rot))
+v = x_data[1][:,1:400]
+
+lnum=5;
+mat = cat([cat([reshape(v[:,i+j*lnum],28,28) for i in 1:lnum]..., dims=2) for j in 0:lnum-1]...,dims=1);
+mat_rot = reverse(transpose(mat), dims=1);
+
 heatmap(mat_rot)
+heatmap(cos.(mat_rot))
 
 
 rkm.v = gpu(v)
@@ -150,33 +135,41 @@ plot(cpu(energy(rkm,J)))
 heatmap(reshape(x_data[1][:,1], 28,28))
 
 plot(reshape(cpu(J.w),:), st=:histogram, fillalpha=0.5, normalize=true, bins=100)
-##########
-using BenchmarkTools
-N = 500_000
-# generate random batch of 8×3 matrices
-A_batch = CUDA.rand(Float32, 8, 3, N)
-# compute all pseudoinverses on the GPU
-@time P_batch = batched_pinv(A_batch);
 
+F = LinearAlgebra.svd(J.w, full=true)
+F.S
 
-s=(1,1_000_000)
-@time α, sGL, gammaC, sGU, mT, A, p = CuArray(rand(prod(s))), CuArray(zeros(prod(s))),
-        CuArray(zeros(prod(s))),CuArray(zeros(prod(s))), CuArray(ones(Float64,prod(s),8)),
-        CuArray(ones(Float64, 8,3,prod(s))), CuArray(rand(3,prod(s)));
-@time α, sGL, gammaC, sGU, mT, A, p = CUDA.rand(prod(s)), CUDA.zeros(prod(s)),
-        CUDA.zeros(prod(s)), CUDA.zeros(prod(s)), CUDA.ones(prod(s),8),
-        CUDA.ones(8,3,prod(s)), CUDA.rand(3,prod(s))
+##################
+7*60/3
+Δw
+F2 = LinearAlgebra.svd(Δw, full=true)
+F2.S
 
-# @time psi = TikhonovGenGPU(α, sGL, gammaC, sGU, mT, A);
-@time psi = TikhonovGenGPUv2(α, sGL, gammaC, sGU, mT, A);
+F.U
+F2.U
 
-@time p = TikhonovGenGPUv2_A(α, sGL, gammaC, sGU, mT, A);
-@time psi = TikhonovGenGPUv2_B(α, sGL, gammaC, sGU, p);
+F.U' * F2.U
+F2.Vt * F.V
 
-α, sGL, gammaC, sGU, mT, A = Array(ones(prod(s))), Array(zeros(prod(s))),
-        Array(zeros(prod(s))),Array(zeros(prod(s))), Array(ones(prod(s),8)),
-        Array(ones(Float32, 8,3,prod(s)))
-@time psi = TikhonovGen(α, sGL, gammaC, sGU, mT, A);
+Σ = cat(Diagonal(F2.S), (hparams.nv - hparams.nh > 0 ? zeros(abs(hparams.nv - hparams.nh), hparams.nh) : zeros(hparams.nv, abs(hparams.nv - hparams.nh))), 
+    dims=(hparams.nv - hparams.nh > 0 ? 1 : 2) )
 
-plot(cpu(psi), st=:histogram)
+M = F.U' * F2.U * Σ * F2.Vt * F.V
+F.U * M * F.Vt
 
+heatmap(abs.(cpu(M)), dims=1)
+
+maximum(abs.(M))
+findall(x->x>2.0, abs.(M))
+
+plot(cpu(M)[100,:])
+########
+using HDF5, Plots
+
+fid = h5open("/home/javier/data00.h5", "r")
+
+length(fid)
+read(fid["run0"]["Energy"])
+length(fid)
+
+"/home/javier/data00.h5"

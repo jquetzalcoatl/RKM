@@ -9,9 +9,9 @@ gpu_usage: true
 dev: 2
 optType: "Adam"
 dataset: "MNIST"
-scale: 1.0
+scale: 3.14
 type: "fixed"
 data_path: "/home/javier/Projects/RKM/Results/XY32/XY32.jld"
 model_path: "/home/javier/Projects/RKM/Results/models"
-model_name: "model1"
+model_name: "model2"
 maxmem: "5GiB"

@@ -7,7 +7,7 @@ using MLDatasets
     nh::Int = 100
     batch_size::Int=100
     lr::Float64 = 0.0001
-    γ::Float64 = 0.001
+    γ::Float64 = 0.007
     t::Int = 500
     gpu_usage::Bool = false
     optType::String = "SGD"
@@ -145,12 +145,44 @@ function load_data(config, hparams::HyperParams)
         train_x_samp = cat(train_x_samp, train_x_tmp, dims=3)
             # end
         # end
-        train_x = train_x_samp
+        train_x = train_x_samp * config.rkm["scale"]
         @info size(train_x,3)
         idx = randperm(size(train_x,3))
         train_data = reshape(train_x, 28*28, :)[:,idx]
         x = [train_data[:,i] for i in Iterators.partition(1:size(train_data,2), hparams.batch_size)][1:end-1]
         return x,0
+    end 
+end
+
+function load_data_test(config, hparams::HyperParams)
+    if config.rkm["dataset"] == "XY"
+        x = load(config.rkm["data_path"])["spin_array"]
+        x = reshape(x, size(x,1),size(x,2)*size(x,3))
+        y = Array(reshape(repeat(reshape(collect(0:9),:,1),1,2000)',:,1)')
+
+        idx = randperm(size(x,2))
+        train_data_x = x[:,idx]
+        train_data_y = y[:,idx]
+        x = [train_data_x[:,i] for i in Iterators.partition(1:size(train_data_x,2), hparams.batch_size)][1:end-1]
+        y = [train_data_y[:,i] for i in Iterators.partition(1:size(train_data_y,2), hparams.batch_size)][1:end-1]
+        return x,y
+    elseif config.rkm["dataset"] == "MNIST"
+        train_x = MLDatasets.MNIST(split=:test)[:].features
+        train_y = MLDatasets.MNIST(split=:test)[:].targets
+
+        train_x_samp = Array{Float32}(train_x[:, :, train_y .== 0])
+        # if size(numbers,1)>1
+            # for idx in numbers[2:end]
+        train_x_tmp = Array{Float32}(train_x[:, :, train_y .== 1])
+        train_x_samp = cat(train_x_samp, train_x_tmp, dims=3)
+            # end
+        # end
+        train_x = train_x_samp * config.rkm["scale"]
+        @info size(train_x,3)
+        idx = randperm(size(train_x,3))
+        train_data = reshape(train_x, 28*28, :)[:,idx]
+        # x = [train_data[:,i] for i in Iterators.partition(1:size(train_data,2), 2_000)][1:end-1]
+        return train_data,0
     end 
 end
 
@@ -169,9 +201,9 @@ function loadModel(config; idx=-1)
     @info baseDir
     rkm = load("$(baseDir)/RKM.jld", "rkm")
     if config.rkm["gpu_usage"]
-        rkm = RKM([CuArray{Float32}(getfield(rkm, field)) for field in fieldnames(RKM)]...)
+        rkm = RKM([CuArray{Float64}(getfield(rkm, field)) for field in fieldnames(RKM)]...)
     else
-        rkm = RKM([getfield(rkm, field) for field in fieldnames(RKM)]...)
+        rkm = RKM([Array{Float64}(getfield(rkm, field)) for field in fieldnames(RKM)]...)
     end
     try
         if idx == -1

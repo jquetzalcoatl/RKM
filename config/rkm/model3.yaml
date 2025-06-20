@@ -13,5 +13,5 @@ scale: 1.0
 type: "fixed"
 data_path: "/home/javier/Projects/RKM/Results/XY32/XY32.jld"
 model_path: "/home/javier/Projects/RKM/Results/models"
-model_name: "model1"
+model_name: "rkm_CD_cent_500_gamma2"
 maxmem: "5GiB"
